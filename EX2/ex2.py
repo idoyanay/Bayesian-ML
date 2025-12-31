@@ -185,12 +185,13 @@ class LinearRegression:
         self.fit(X, y)
         return self.predict(X)
 
-def plot_linear_estimations(test_hours, test, d, train_hours, train):
+def plot_linear_estimations(test_hours, test, d, train_hours, train, nov16_hours, nov16):
     ln = LinearRegression(polynomial_basis_functions(d)).fit(train_hours, train)
     title = f"Linear Regression Predictions with d={d}\n MSE: {np.mean((test - ln.predict(test_hours))**2):.2f}"
     plt.figure()
-    plt.plot(test_hours, test, 'k.', label='true values')
-    plt.plot(test_hours, ln.predict(test_hours), 'r-', lw=2, label='predictions')
+    plt.plot(nov16_hours, nov16, 'k.', label='true values')
+    plt.plot(test_hours, ln.predict(test_hours), 'r-', lw=2, label='test predictions')
+    plt.plot(train_hours, ln.predict(train_hours), 'g-', lw=2, label='train predictions')
     plt.title(title)
     plt.xlabel('hour')
     plt.ylabel('temperature [C]')
@@ -216,15 +217,33 @@ def plot_prior(x, title, mu_prior, cov_prior, basis_functions):
     plt.show()
 
 
-def plot_bayesian_estimations(blr, test_hours, test, test_est, test_std, title, basis_functions):
+def plot_bayesian_estimations(blr, nov16_hours, nov16, test_hours, test, train_hours, train, title, basis_functions):
+    # Get predictions and standard deviations for all nov16_hours
+    all_est = blr.predict(nov16_hours)
+    all_std = blr.predict_std(nov16_hours)
+
     plt.figure()
-    plt.fill_between(test_hours, test_est - test_std, test_est + test_std, alpha=.5, label='confidence interval')
+
+    # Plot confidence interval for all hours
+    plt.fill_between(nov16_hours, all_est - all_std, all_est + all_std, alpha=.5, label='confidence interval')
+
+    # Plot sample estimations from posterior
     for i in range(5):
-        theta_sample = np.random.multivariate_normal(blr.mean_posterior, blr.sigma_posterior) ## the MMSE is the test_est, and this is also the mean
-        est_sample = basis_functions(test_hours) @ theta_sample
-        plt.plot(test_hours, est_sample)
-    plt.plot(test_hours, test, 'k.', label='true values')
-    plt.plot(test_hours, test_est, 'r-', lw=2, label='predictions')
+        theta_sample = np.random.multivariate_normal(blr.mean_posterior, blr.sigma_posterior)
+        est_sample = basis_functions(nov16_hours) @ theta_sample
+        plt.plot(nov16_hours, est_sample, alpha=0.7, lw=1.5)
+
+    # Create masks for train and test indices
+    train_mask = np.isin(nov16_hours, train_hours)
+    test_mask = np.isin(nov16_hours, test_hours)
+
+    # Plot true values in different colors for train and test
+    plt.plot(nov16_hours[train_mask], nov16[train_mask], 'b.', label='train true values', markersize=8)
+    plt.plot(nov16_hours[test_mask], nov16[test_mask], 'g.', label='test true values', markersize=8)
+
+    # Plot predictions for all hours
+    plt.plot(nov16_hours, all_est, 'r-', lw=2, label='predictions')
+
     plt.title(title)
     plt.xlabel('hour')
     plt.ylabel('temperature [C]')
@@ -271,7 +290,7 @@ def main():
     # ----------------------------------------- Classical Linear Regression
     if args.linear or args.all_parts:
         for d in degrees:
-            plot_linear_estimations(test_hours, test, d, train_hours, train)
+            plot_linear_estimations(test_hours, test, d, train_hours, train, nov16_hours, nov16)
 
     # ----------------------------------------- Bayesian Linear Regression
 
@@ -281,7 +300,7 @@ def main():
     x = np.arange(0, 24, .1)
 
     # setup the model parameters
-    sigma = 0.25
+    sigma = 0.5
     degrees = [3, 7]  # polynomial basis functions degrees
 
     # ---------------------- polynomial basis functions
@@ -299,7 +318,7 @@ def main():
             test_est = blr.predict(test_hours)
             test_std = blr.predict_std(test_hours)
             title = f'Bayesian Polynomial Linear Regression Predictions with d={deg}\n MSE: {np.mean((test - test_est)**2):.2f}'
-            plot_bayesian_estimations(blr, test_hours, test, test_est, test_std, title, pbf)
+            plot_bayesian_estimations(blr, nov16_hours, nov16, test_hours, test, train_hours, train, title, pbf)
 
 
     # ---------------------- Fourier basis functions
@@ -319,7 +338,7 @@ def main():
             test_est = blr.predict(test_hours)
             test_std = blr.predict_std(test_hours)
             title = f'Bayesian Fourier Linear Regression Predictions with K={K}\n MSE: {np.mean((test - test_est)**2):.2f}'
-            plot_bayesian_estimations(blr, test_hours, test, test_est, test_std, title, rbf)
+            plot_bayesian_estimations(blr, nov16_hours, nov16, test_hours, test, train_hours, train, title, rbf)
 
 
     # ---------------------- cubic regression splines
@@ -339,7 +358,7 @@ def main():
             test_est = blr.predict(test_hours)
             test_std = blr.predict_std(test_hours)
             title = f'Bayesian Cubic Spline Linear Regression Predictions with knots at {k}\n MSE: {np.mean((test - test_est)**2):.2f}'
-            plot_bayesian_estimations(blr, test_hours, test, test_est, test_std, title, spline)
+            plot_bayesian_estimations(blr, nov16_hours, nov16, test_hours, test, train_hours, train, title, spline)
 
 
 if __name__ == '__main__':
